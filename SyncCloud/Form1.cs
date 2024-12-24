@@ -49,11 +49,20 @@ namespace SyncCloud
       this.Close();
     }
 
-    private void btnSync_Click(object sender, EventArgs e)
+    private void setActionButtons(bool enable)
     {
+      btnExit.Enabled = enable;
+      btnSync.Enabled = enable;
+      btnBrowseCloudFolder.Enabled = enable;
+      btnBrowseLocalFolder.Enabled = enable;
+    }
+    private async void btnSync_Click(object sender, EventArgs e)
+    {
+      setActionButtons(false);
       if (cloudFolderSet && localFolderSet)
       {
         textBoxProgress.Clear();
+        textBoxProgress.AppendText("Working...");
         if (!textBoxCloudFolder.Text.Contains("OneDrive"))
         {
           string msg = "Cloud folder does not contain OneDrive, please re-select.\nCurrently only support MS OneDrive.";
@@ -70,17 +79,17 @@ namespace SyncCloud
           if (MessageBox.Show(msg, "Check Folders", MessageBoxButtons.YesNo) == DialogResult.No)
             return;
         }
-        string[] cloudFolders = Directory.GetDirectories(textBoxCloudFolder.Text);
-        string[] localFolders = Directory.GetDirectories(textBoxLocalFolder.Text);
-        int syncFile = syncFolders(cloudFolders, localFolders, textBoxCloudFolder.Text, textBoxLocalFolder.Text);
+        string[] cloudFolders = await Task.Run(()=>Directory.GetDirectories(textBoxCloudFolder.Text));
+        string[] localFolders = await Task.Run(()=>Directory.GetDirectories(textBoxLocalFolder.Text));
+        int syncFile = await syncFoldersAsync(cloudFolders, localFolders, textBoxCloudFolder.Text, textBoxLocalFolder.Text);
         /*Debug.WriteLine("[DEBUG-hwlee]List of directories in "+ textBoxCloudFolder.Text+":");
         foreach(String d in directories) 
         {
           Debug.WriteLine(d);
         }*/
-        string[] cloudFiles = Directory.GetFiles(textBoxCloudFolder.Text);
-        string[] localFiles = Directory.GetFiles(textBoxLocalFolder.Text);
-        syncFile += syncFiles(textBoxCloudFolder.Text, textBoxLocalFolder.Text);
+        string[] cloudFiles = await Task.Run(()=>Directory.GetFiles(textBoxCloudFolder.Text));
+        string[] localFiles = await Task.Run(()=>Directory.GetFiles(textBoxLocalFolder.Text));
+        syncFile += await syncFilesAsync(textBoxCloudFolder.Text, textBoxLocalFolder.Text);
         string msg1 = "";
         if (syncFile > 0)
         {
@@ -96,54 +105,60 @@ namespace SyncCloud
         {
           Debug.WriteLine(f);
         }*/
+        textBoxProgress.AppendText("Finished.");
       }
       else
       {
         MessageBox.Show("Please set cloud and/or local folder");
       }
+      setActionButtons(true);
     }
-    private int syncFolders(string[] cloud, string[] local, string parentCloud, string parentLocal)
+    private async Task<int> syncFoldersAsync(string[] cloud, string[] local, string parentCloud, string parentLocal)
     {
       int syncFile = 0;
       // for each folder of cloud
       foreach (string folder in cloud)
       {
         string? localFolder = getLocal(folder, local);
+        if (!showCopyOnly)
+          textBoxProgress.AppendText("   Checking cloud folder " + folder);
         if (localFolder == null)
         {
           string[] tokens = folder.Split('\\');
           string path = tokens[tokens.Length - 1];
           localFolder = parentLocal + "\\" + path;
           Debug.WriteLine("[DEBUG-hwlee]Creating cloud folder : " + folder + " to local folder : " + localFolder);
-          System.IO.Directory.CreateDirectory(localFolder);
+          await Task.Run(()=>System.IO.Directory.CreateDirectory(localFolder));
         }
-        syncFile += syncFiles(folder, localFolder);
+        syncFile += await syncFilesAsync(folder, localFolder);
       }
       // for each folder of local
       foreach (string folder in local)
       {
         string? cloudFolder = getLocal(folder, cloud);
+        if (!showCopyOnly)
+          textBoxProgress.AppendText("   Checking local folder " + folder);
         if (cloudFolder == null)
         {
           string[] tokens = folder.Split('\\');
           string path = tokens[tokens.Length - 1];
           cloudFolder = parentCloud + "\\" + path;
           Debug.WriteLine("[DEBUG-hwlee]Creating local folder : " + folder + " to cloud folder : " + cloudFolder);
-          System.IO.Directory.CreateDirectory(cloudFolder);
-          syncFile += syncFiles(cloudFolder, folder);
+          await Task.Run(()=>System.IO.Directory.CreateDirectory(cloudFolder));
+          syncFile += await syncFilesAsync(cloudFolder, folder);
         }
       }
       return syncFile;
     }
-    private int syncFiles(string cloud, string local)
+    private async Task<int> syncFilesAsync(string cloud, string local)
     {
       int syncFile = 0;
-      string[] cloudFolders = Directory.GetDirectories(cloud);
-      string[] localFolders = Directory.GetDirectories(local);
-      syncFile += syncFolders(cloudFolders, localFolders, cloud, local);
+      string[] cloudFolders = await Task.Run(()=>Directory.GetDirectories(cloud));
+      string[] localFolders = await Task.Run(()=>Directory.GetDirectories(local));
+      syncFile += await syncFoldersAsync(cloudFolders, localFolders, cloud, local);
 
-      string[] cloudFiles = Directory.GetFiles(cloud);
-      string[] localFiles = Directory.GetFiles(local);
+      string[] cloudFiles = await Task.Run(()=>Directory.GetFiles(cloud));
+      string[] localFiles = await Task.Run(()=>Directory.GetFiles(local));
       foreach (string f in cloudFiles)
       {
         string fileName = Path.GetFileName(f);
@@ -157,21 +172,33 @@ namespace SyncCloud
           long localTime = File.GetLastWriteTimeUtc(localName).ToFileTime();
           if ((actionMode == ActionMode.toCloud || actionMode == ActionMode.Synchronize) && cloudTime < localTime)
           {
-            File.Copy(localName, f, true);
+            //File.Copy(localName, f, true);
+            using (var outStream = new FileStream(f, FileMode.Create, FileAccess.Write, FileShare.Read))
+            {
+              using (var inStream = new FileStream(localName, FileMode.Open, FileAccess.Read, FileShare.Read))
+              {
+                await inStream.CopyToAsync(outStream);
+              }
+            }
             Debug.WriteLine("[DEBUG-hwlee]Copying file : " + localName + " to  : " + f);
-            if (showCopyOnly)
-              textBoxProgress.AppendText("    Copying file : " + localName + " to : " + f + Environment.NewLine);
+            textBoxProgress.AppendText("    Copying file : " + localName + " to : " + f + Environment.NewLine);
             syncFile++;
           }
           else if ((actionMode == ActionMode.toLocal || actionMode == ActionMode.Synchronize) && cloudTime > localTime)
           {
-            File.Copy(f, localName, true);
+            //File.Copy(f, localName, true);
+            using (var outStream = new FileStream(localName, FileMode.Create, FileAccess.Write, FileShare.Read))
+            {
+              using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.Read))
+              {
+                await inStream.CopyToAsync(outStream);
+              }
+            }
             Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to  : " + localName);
-            if (showCopyOnly)
-              textBoxProgress.AppendText("    Copying file : " + f + " to : " + localName + Environment.NewLine);
+            textBoxProgress.AppendText("    Copying file : " + f + " to : " + localName + Environment.NewLine);
             if (removeCloud && actionMode == ActionMode.toLocal)
             {
-              File.Delete(f);
+              await Task.Run(() => File.Delete(f));
               textBoxProgress.AppendText("    Removing file : " + f + " from cloud " + Environment.NewLine);
             }
             syncFile++;
@@ -183,10 +210,18 @@ namespace SyncCloud
             textBoxProgress.AppendText("Synching file : " + f + " to local : " + localName + Environment.NewLine);
           Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to local : " + localName);
           textBoxProgress.AppendText("Copying file : " + f + " to local : " + localName + Environment.NewLine);
-          File.Copy(f, localName, true);
+          //File.Copy(f, localName, true);
+          using (var outStream = new FileStream(localName, FileMode.Create, FileAccess.Write, FileShare.Read))
+          {
+            using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+              await inStream.CopyToAsync(outStream);
+            }
+          }
           if (removeCloud && actionMode == ActionMode.toLocal)
           {
-            File.Delete(f);
+            //File.Delete(f);
+            await Task.Run(() => File.Delete(f));
             textBoxProgress.AppendText("    Removing file : " + f + " from cloud " + Environment.NewLine);
           }
           syncFile++;
@@ -202,7 +237,14 @@ namespace SyncCloud
         if ((actionMode == ActionMode.toCloud || actionMode == ActionMode.Synchronize) && !File.Exists(cloudName))
         {
           Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to cloud : " + cloudName);
-          File.Copy(f, cloudName, true);
+          //File.Copy(f, cloudName, true);
+          using (var outStream = new FileStream(cloudName, FileMode.Create, FileAccess.Write, FileShare.Read))
+          {
+            using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+              await inStream.CopyToAsync(outStream);
+            }
+          }
           textBoxProgress.AppendText("Copying file : " + f + " to cloud : " + cloudName + Environment.NewLine);
           syncFile++;
         }
@@ -226,11 +268,11 @@ namespace SyncCloud
       //Debug.WriteLine("[DEBUG-hwlee]======= Not Found folder : " + folder + " in local");
       return null; // Not found
     }
-    private void syncFolder(string cloud, string local)
+    private async Task syncFolderAsync(string cloud, string local)
     {
-      string[] cloudFolders = Directory.GetDirectories(cloud);
-      string[] localFolders = Directory.GetDirectories(local);
-      syncFolders(cloudFolders, localFolders, cloud, local);
+      string[] cloudFolders = await Task.Run(()=>Directory.GetDirectories(cloud));
+      string[] localFolders = await Task.Run(()=>Directory.GetDirectories(local));
+      await syncFoldersAsync(cloudFolders, localFolders, cloud, local);
     }
     private bool checkFolders()
     {
