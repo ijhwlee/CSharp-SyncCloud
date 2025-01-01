@@ -62,7 +62,7 @@ namespace SyncCloud
       if (cloudFolderSet && localFolderSet)
       {
         textBoxProgress.Clear();
-        textBoxProgress.AppendText("Working...");
+        textBoxProgress.AppendText("Working..."+ Environment.NewLine);
         if (!textBoxCloudFolder.Text.Contains("OneDrive"))
         {
           string msg = "Cloud folder does not contain OneDrive, please re-select.\nCurrently only support MS OneDrive.";
@@ -105,7 +105,7 @@ namespace SyncCloud
         {
           Debug.WriteLine(f);
         }*/
-        textBoxProgress.AppendText("Finished.");
+        textBoxProgress.AppendText("Finished."+ Environment.NewLine);
       }
       else
       {
