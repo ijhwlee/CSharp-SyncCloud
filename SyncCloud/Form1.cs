@@ -127,7 +127,7 @@ namespace SyncCloud
           string[] tokens = folder.Split('\\');
           string path = tokens[tokens.Length - 1];
           localFolder = parentLocal + "\\" + path;
-          Debug.WriteLine("[DEBUG-hwlee]Creating cloud folder : " + folder + " to local folder : " + localFolder);
+          //Debug.WriteLine("[DEBUG-hwlee]Creating cloud folder : " + folder + " to local folder : " + localFolder);
           await Task.Run(()=>System.IO.Directory.CreateDirectory(localFolder));
         }
         syncFile += await syncFilesAsync(folder, localFolder);
@@ -143,7 +143,7 @@ namespace SyncCloud
           string[] tokens = folder.Split('\\');
           string path = tokens[tokens.Length - 1];
           cloudFolder = parentCloud + "\\" + path;
-          Debug.WriteLine("[DEBUG-hwlee]Creating local folder : " + folder + " to cloud folder : " + cloudFolder);
+          //Debug.WriteLine("[DEBUG-hwlee]Creating local folder : " + folder + " to cloud folder : " + cloudFolder);
           await Task.Run(()=>System.IO.Directory.CreateDirectory(cloudFolder));
           syncFile += await syncFilesAsync(cloudFolder, folder);
         }
@@ -173,38 +173,62 @@ namespace SyncCloud
           if ((actionMode == ActionMode.toCloud || actionMode == ActionMode.Synchronize) && cloudTime < localTime)
           {
             //File.Copy(localName, f, true);
+            var fileInfo = new FileInfo(f);
+            bool isReadOnly = false;
+            if (fileInfo.IsReadOnly)
+            {
+              fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
+              isReadOnly = true;
+            }
             using (var outStream = new FileStream(f, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
               using (var inStream = new FileStream(localName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 81920, options:FileOptions.Asynchronous | FileOptions.SequentialScan))
               {
                 await inStream.CopyToAsync(outStream);
                 // Preserve attributes and timestamps
+                if (isReadOnly)
+                {
+                  fileInfo = new FileInfo(f);
+                  fileInfo.IsReadOnly = true; // Restore read-only attribute if it was set
+                }
                 File.SetAttributes(f, File.GetAttributes(localName));
                 File.SetCreationTime(f, File.GetCreationTime(localName));
                 File.SetLastAccessTime(f, File.GetLastAccessTime(localName));
                 File.SetLastWriteTime(f, File.GetLastWriteTime(localName));
               }
             }
-            Debug.WriteLine("[DEBUG-hwlee]Copying file : " + localName + " to  : " + f);
+            //Debug.WriteLine("[DEBUG-hwlee]Copying file : " + localName + " to  : " + f);
             textBoxProgress.AppendText("    Copying file : " + localName + " to : " + f + Environment.NewLine);
             syncFile++;
           }
           else if ((actionMode == ActionMode.toLocal || actionMode == ActionMode.Synchronize) && cloudTime > localTime)
           {
             //File.Copy(f, localName, true);
+            var fileInfo = new FileInfo(localName);
+            bool isReadOnly = false;
+            if (fileInfo.IsReadOnly)
+            {
+              fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
+              isReadOnly = true;
+            }
             using (var outStream = new FileStream(localName, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
               using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
               {
                 await inStream.CopyToAsync(outStream);
                 // Preserve attributes and timestamps
+                if (isReadOnly)
+                {
+                  fileInfo = new FileInfo(localName);
+                  fileInfo.IsReadOnly = true; // Restore read-only attribute if it was set
+                }
                 File.SetAttributes(localName, File.GetAttributes(f));
                 File.SetCreationTime(localName, File.GetCreationTime(f));
                 File.SetLastAccessTime(localName, File.GetLastAccessTime(f));
                 File.SetLastWriteTime(localName, File.GetLastWriteTime(f));
               }
             }
-            Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to  : " + localName);
+            //Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to  : " + localName);
             textBoxProgress.AppendText("    Copying file : " + f + " to : " + localName + Environment.NewLine);
             if (removeCloud && actionMode == ActionMode.toLocal)
             {
@@ -218,15 +242,27 @@ namespace SyncCloud
         {
           if (!showCopyOnly)
             textBoxProgress.AppendText("Synching file : " + f + " to local : " + localName + Environment.NewLine);
-          Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to local : " + localName);
+          //Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to local : " + localName);
           textBoxProgress.AppendText("Copying file : " + f + " to local : " + localName + Environment.NewLine);
           //File.Copy(f, localName, true);
+          var fileInfo = new FileInfo(localName);
+          bool isReadOnly = false;
+          if (fileInfo.IsReadOnly)
+          {
+            fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
+            isReadOnly = true;
+          }
           using (var outStream = new FileStream(localName, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
           {
             using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
               await inStream.CopyToAsync(outStream);
               // Preserve attributes and timestamps
+              if (isReadOnly)
+              {
+                fileInfo = new FileInfo(localName);
+                fileInfo.IsReadOnly = true; // Restore read-only attribute if it was set
+              }
               File.SetAttributes(localName, File.GetAttributes(f));
               File.SetCreationTime(localName, File.GetCreationTime(f));
               File.SetLastAccessTime(localName, File.GetLastAccessTime(f));
@@ -242,7 +278,7 @@ namespace SyncCloud
           syncFile++;
         }
       }
-      Debug.WriteLine("[DEBUG-hwlee]syncFiles: actionMode = " + actionMode + "====================================");
+      //Debug.WriteLine("[DEBUG-hwlee]syncFiles: actionMode = " + actionMode + "====================================");
       foreach (string f in localFiles)
       {
         string fileName = Path.GetFileName(f);
@@ -251,12 +287,14 @@ namespace SyncCloud
           textBoxProgress.AppendText("Synching file : " + f + " to cloud : " + cloudName + Environment.NewLine);
         if ((actionMode == ActionMode.toCloud || actionMode == ActionMode.Synchronize) && !File.Exists(cloudName))
         {
-          Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to cloud : " + cloudName);
+          //Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to cloud : " + cloudName);
           //File.Copy(f, cloudName, true);
           using (var outStream = new FileStream(cloudName, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
           {
             using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
+              var fileInfo = new FileInfo(cloudName);
+              fileInfo.Attributes = FileAttributes.Normal; // Clear attributes to avoid issues with copying
               await inStream.CopyToAsync(outStream);
               // Preserve attributes and timestamps
               File.SetAttributes(cloudName, File.GetAttributes(f));
@@ -298,19 +336,19 @@ namespace SyncCloud
     {
       bool match = false;
       string[] cloudTokens = textBoxCloudFolder.Text.Split('\\');
-      Debug.WriteLine("[DEBUG-hwlee]List of tokens in " + textBoxCloudFolder.Text + ":");
+      //Debug.WriteLine("[DEBUG-hwlee]List of tokens in " + textBoxCloudFolder.Text + ":");
       foreach (String d in cloudTokens)
       {
         Debug.WriteLine(d);
       }
       string[] localTokens = textBoxLocalFolder.Text.Split('\\');
-      Debug.WriteLine("[DEBUG-hwlee]List of tokens in " + textBoxLocalFolder.Text + ":");
+      //Debug.WriteLine("[DEBUG-hwlee]List of tokens in " + textBoxLocalFolder.Text + ":");
       foreach (String d in localTokens)
       {
         Debug.WriteLine(d);
       }
       int count = cloudTokens.Length < localTokens.Length ? cloudTokens.Length : localTokens.Length;
-      Debug.WriteLine("[DEBUG-hwlee]count = " + count + ", cloud = " + cloudTokens.Length + ", local = " + localTokens.Length);
+      //Debug.WriteLine("[DEBUG-hwlee]count = " + count + ", cloud = " + cloudTokens.Length + ", local = " + localTokens.Length);
       int idxCloud = cloudTokens.Length - 1;
       int idxLocal = localTokens.Length - 1;
       match = true;
@@ -330,25 +368,25 @@ namespace SyncCloud
 
     private void radioButton_CheckedChanged(object sender, EventArgs e)
     {
-      Debug.WriteLine("[DEBUG-hwlee]radioButton_CheckedChanged sender is " + sender + " ==============================");
+      //Debug.WriteLine("[DEBUG-hwlee]radioButton_CheckedChanged sender is " + sender + " ==============================");
       if (sender.GetType() == typeof(RadioButton))
       {
         RadioButton radioButton = (RadioButton)sender;
-        Debug.WriteLine("[DEBUG-hwlee]radioButton_CheckedChanged sender.Name is " + radioButton.Name);
+        //Debug.WriteLine("[DEBUG-hwlee]radioButton_CheckedChanged sender.Name is " + radioButton.Name);
         if (radioButton.Name == "radioToLocal")
         {
           actionMode = ActionMode.toLocal;
-          Debug.WriteLine("[DEBUG-hwlee]actionMode is " + actionMode);
+          //Debug.WriteLine("[DEBUG-hwlee]actionMode is " + actionMode);
         }
         else if (radioButton.Name == "radioToCloud")
         {
           actionMode = ActionMode.toCloud;
-          Debug.WriteLine("[DEBUG-hwlee]actionMode is " + actionMode);
+          //Debug.WriteLine("[DEBUG-hwlee]actionMode is " + actionMode);
         }
         else if (radioButton.Name == "radioSynchronize")
         {
           actionMode = ActionMode.Synchronize;
-          Debug.WriteLine("[DEBUG-hwlee]actionMode is " + actionMode);
+          //Debug.WriteLine("[DEBUG-hwlee]actionMode is " + actionMode);
         }
       }
     }
