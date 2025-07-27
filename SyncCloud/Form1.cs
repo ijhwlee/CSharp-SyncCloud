@@ -175,7 +175,7 @@ namespace SyncCloud
             //File.Copy(localName, f, true);
             var fileInfo = new FileInfo(f);
             bool isReadOnly = false;
-            if (fileInfo.IsReadOnly)
+            if (fileInfo.Exists && fileInfo.IsReadOnly)
             {
               fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
               isReadOnly = true;
@@ -206,7 +206,7 @@ namespace SyncCloud
             //File.Copy(f, localName, true);
             var fileInfo = new FileInfo(localName);
             bool isReadOnly = false;
-            if (fileInfo.IsReadOnly)
+            if (fileInfo.Exists && fileInfo.IsReadOnly)
             {
               fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
               isReadOnly = true;
@@ -247,11 +247,6 @@ namespace SyncCloud
           //File.Copy(f, localName, true);
           var fileInfo = new FileInfo(localName);
           bool isReadOnly = false;
-          if (fileInfo.IsReadOnly)
-          {
-            fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
-            isReadOnly = true;
-          }
           using (var outStream = new FileStream(localName, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
           {
             using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 81920, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
