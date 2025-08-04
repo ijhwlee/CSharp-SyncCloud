@@ -116,6 +116,7 @@ namespace SyncCloud
     private async Task<int> syncFoldersAsync(string[] cloud, string[] local, string parentCloud, string parentLocal)
     {
       int syncFile = 0;
+      List<Task<int>> tasks = new List<Task<int>>();
       // for each folder of cloud
       foreach (string folder in cloud)
       {
@@ -130,7 +131,13 @@ namespace SyncCloud
           //Debug.WriteLine("[DEBUG-hwlee]Creating cloud folder : " + folder + " to local folder : " + localFolder);
           await Task.Run(()=>System.IO.Directory.CreateDirectory(localFolder));
         }
-        syncFile += await syncFilesAsync(folder, localFolder);
+        //syncFile += await syncFilesAsync(folder, localFolder);
+        tasks.Add(syncFilesAsync(folder, localFolder));
+      }
+      int[] ints = await Task.WhenAll(tasks);
+      foreach (int i in ints)
+      {
+        syncFile += i;
       }
       // for each folder of local
       foreach (string folder in local)
@@ -182,9 +189,17 @@ namespace SyncCloud
               fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
               isReadOnly = true;
             }
-            using (var outStream = new FileStream(f, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: buffer_size, options: FileOptions.Asynchronous | FileOptions.SequentialScan))
+            FileAttributes attr = File.GetAttributes(f);
+            bool isHidden = (attr & FileAttributes.Hidden) != 0;
+            bool isSystem = (attr & FileAttributes.System) != 0;
+            bool isArchive = (attr & FileAttributes.Archive) != 0;
+            if (isHidden || isSystem || isReadOnly)
             {
-              using (var inStream = new FileStream(localName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer_size, options:FileOptions.Asynchronous | FileOptions.SequentialScan))
+              File.SetAttributes(f, FileAttributes.Normal);
+            }
+            using (var outStream = new FileStream(f, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: buffer_size, useAsync:true))
+            {
+              using (var inStream = new FileStream(localName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer_size, useAsync:true))
               {
                 //await inStream.CopyToAsync(outStream);
                 byte[] buffer = new byte[buffer_size];
@@ -194,11 +209,6 @@ namespace SyncCloud
                   await outStream.WriteAsync(buffer, 0, bytesRead);
                 }
                 // Preserve attributes and timestamps
-                if (isReadOnly)
-                {
-                  fileInfo = new FileInfo(f);
-                  fileInfo.IsReadOnly = true; // Restore read-only attribute if it was set
-                }
                 File.SetAttributes(f, File.GetAttributes(localName));
                 File.SetCreationTime(f, File.GetCreationTime(localName));
                 File.SetLastAccessTime(f, File.GetLastAccessTime(localName));
@@ -219,11 +229,11 @@ namespace SyncCloud
               fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
               isReadOnly = true;
             }
-            FileAttributes attr = File.GetAttributes(f);
+            FileAttributes attr = File.GetAttributes(localName);
             bool isHidden = (attr & FileAttributes.Hidden) != 0;
             bool isSystem = (attr & FileAttributes.System) != 0;
             bool isArchive = (attr & FileAttributes.Archive) != 0;
-            if (isHidden || isSystem)
+            if (isHidden || isSystem || isReadOnly)
             {
               File.SetAttributes(localName, FileAttributes.Normal);
             }
@@ -239,11 +249,6 @@ namespace SyncCloud
                   await outStream.WriteAsync(buffer, 0, bytesRead);
                 }
                 // Preserve attributes and timestamps
-                if (isReadOnly)
-                {
-                  fileInfo = new FileInfo(localName);
-                  fileInfo.IsReadOnly = true; // Restore read-only attribute if it was set
-                }
                 File.SetAttributes(localName, File.GetAttributes(f));
                 File.SetCreationTime(localName, File.GetCreationTime(f));
                 File.SetLastAccessTime(localName, File.GetLastAccessTime(f));
@@ -260,15 +265,14 @@ namespace SyncCloud
             syncFile++;
           }
         }
-        else if (actionMode == ActionMode.toLocal || actionMode == ActionMode.Synchronize)
+        else if (actionMode == ActionMode.toLocal || actionMode == ActionMode.Synchronize) // local file does not exist
         {
           if (!showCopyOnly)
             textBoxProgress.AppendText("Synching file : " + f + " to local : " + localName + Environment.NewLine);
           //Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to local : " + localName);
           textBoxProgress.AppendText("Copying file : " + f + " to local : " + localName + Environment.NewLine);
           //File.Copy(f, localName, true);
-          var fileInfo = new FileInfo(localName);
-          bool isReadOnly = false;
+          //var fileInfo = new FileInfo(localName);
           using (var outStream = new FileStream(localName, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: buffer_size, useAsync:true))
           {
             using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer_size, useAsync:true))
@@ -281,11 +285,6 @@ namespace SyncCloud
                 await outStream.WriteAsync(buffer, 0, bytesRead);
               }
               // Preserve attributes and timestamps
-              if (isReadOnly)
-              {
-                fileInfo = new FileInfo(localName);
-                fileInfo.IsReadOnly = true; // Restore read-only attribute if it was set
-              }
               File.SetAttributes(localName, File.GetAttributes(f));
               File.SetCreationTime(localName, File.GetCreationTime(f));
               File.SetLastAccessTime(localName, File.GetLastAccessTime(f));
@@ -301,6 +300,7 @@ namespace SyncCloud
           syncFile++;
         }
       }
+      if (actionMode == ActionMode.Synchronize) return syncFile;
       //Debug.WriteLine("[DEBUG-hwlee]syncFiles: actionMode = " + actionMode + "====================================");
       foreach (string f in localFiles)
       {
@@ -341,12 +341,25 @@ namespace SyncCloud
         {
           //Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to cloud : " + cloudName);
           //File.Copy(f, cloudName, true);
+          var fileInfo = new FileInfo(cloudName);
+          bool isReadOnly = false;
+          if (fileInfo.Exists && fileInfo.IsReadOnly)
+          {
+            fileInfo.IsReadOnly = false; // Clear read-only attribute to avoid issues with copying
+            isReadOnly = true;
+          }
+          FileAttributes attr = File.GetAttributes(cloudName);
+          bool isHidden = (attr & FileAttributes.Hidden) != 0;
+          bool isSystem = (attr & FileAttributes.System) != 0;
+          bool isArchive = (attr & FileAttributes.Archive) != 0;
+          if (isHidden || isSystem || isReadOnly)
+          {
+            File.SetAttributes(cloudName, FileAttributes.Normal);
+          }
           using (var outStream = new FileStream(cloudName, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: buffer_size, useAsync:true))
           {
             using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer_size, useAsync:true))
             {
-              var fileInfo = new FileInfo(cloudName);
-              fileInfo.Attributes = FileAttributes.Normal; // Clear attributes to avoid issues with copying
               //await inStream.CopyToAsync(outStream);
               byte[] buffer = new byte[buffer_size];
               int bytesRead;
