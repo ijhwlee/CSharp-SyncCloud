@@ -210,18 +210,21 @@ namespace SyncCloud
               {
                 using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer_size, useAsync: true))
                 {
-                  //await inStream.CopyToAsync(outStream);
-                  byte[] buffer = new byte[buffer_size];
+                  await inStream.CopyToAsync(outStream);
+                  /*byte[] buffer = new byte[buffer_size];
                   int bytesRead;
                   while ((bytesRead = await inStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                   {
                     await outStream.WriteAsync(buffer, 0, bytesRead);
-                  }
+                  }*/
                   // Preserve attributes and timestamps
-                  File.SetAttributes(localName, File.GetAttributes(f));
-                  File.SetCreationTime(localName, File.GetCreationTime(f));
-                  File.SetLastAccessTime(localName, File.GetLastAccessTime(f));
-                  File.SetLastWriteTime(localName, File.GetLastWriteTime(f));
+                  if (isHidden || isSystem || isReadOnly)
+                  {
+                    File.SetAttributes(localName, File.GetAttributes(f));
+                  }
+                  //File.SetCreationTime(localName, File.GetCreationTime(f));
+                  //File.SetLastAccessTime(localName, File.GetLastAccessTime(f));
+                  //File.SetLastWriteTime(localName, File.GetLastWriteTime(f));
                 }
               }
               //Debug.WriteLine("[DEBUG-hwlee]Copying file : " + f + " to  : " + localName);
@@ -245,18 +248,18 @@ namespace SyncCloud
             {
               using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer_size, useAsync: true))
               {
-                //await inStream.CopyToAsync(outStream);
-                byte[] buffer = new byte[buffer_size];
+                await inStream.CopyToAsync(outStream);
+                /*byte[] buffer = new byte[buffer_size];
                 int bytesRead;
                 while ((bytesRead = await inStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
                   await outStream.WriteAsync(buffer, 0, bytesRead);
-                }
+                }*/
                 // Preserve attributes and timestamps
-                File.SetAttributes(localName, File.GetAttributes(f));
-                File.SetCreationTime(localName, File.GetCreationTime(f));
-                File.SetLastAccessTime(localName, File.GetLastAccessTime(f));
-                File.SetLastWriteTime(localName, File.GetLastWriteTime(f));
+                //File.SetAttributes(localName, File.GetAttributes(f));
+                //File.SetCreationTime(localName, File.GetCreationTime(f));
+                //File.SetLastAccessTime(localName, File.GetLastAccessTime(f));
+                //File.SetLastWriteTime(localName, File.GetLastWriteTime(f));
               }
             }
             if (removeCloud && actionMode == ActionMode.toLocal)
@@ -288,20 +291,18 @@ namespace SyncCloud
             {
               using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer_size, useAsync: true))
               {
-                var fileInfo = new FileInfo(cloudName);
-                fileInfo.Attributes = FileAttributes.Normal; // Clear attributes to avoid issues with copying
-                                                             //await inStream.CopyToAsync(outStream);
-                byte[] buffer = new byte[buffer_size];
+                await inStream.CopyToAsync(outStream);
+                /*byte[] buffer = new byte[buffer_size];
                 int bytesRead;
                 while ((bytesRead = await inStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
                   await outStream.WriteAsync(buffer, 0, bytesRead);
-                }
+                }*/
                 // Preserve attributes and timestamps
-                File.SetAttributes(cloudName, File.GetAttributes(f));
-                File.SetCreationTime(cloudName, File.GetCreationTime(f));
-                File.SetLastAccessTime(cloudName, File.GetLastAccessTime(f));
-                File.SetLastWriteTime(cloudName, File.GetLastWriteTime(f));
+                //File.SetAttributes(cloudName, File.GetAttributes(f));
+                //File.SetCreationTime(cloudName, File.GetCreationTime(f));
+                //File.SetLastAccessTime(cloudName, File.GetLastAccessTime(f));
+                //File.SetLastWriteTime(cloudName, File.GetLastWriteTime(f));
               }
             }
             textBoxProgress.AppendText("Copying file : " + f + " to cloud : " + cloudName + Environment.NewLine);
@@ -330,18 +331,21 @@ namespace SyncCloud
             {
               using (var inStream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer_size, useAsync: true))
               {
-                //await inStream.CopyToAsync(outStream);
-                byte[] buffer = new byte[buffer_size];
+                await inStream.CopyToAsync(outStream);
+                /*byte[] buffer = new byte[buffer_size];
                 int bytesRead;
                 while ((bytesRead = await inStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
                   await outStream.WriteAsync(buffer, 0, bytesRead);
-                }
+                }*/
                 // Preserve attributes and timestamps
-                File.SetAttributes(cloudName, File.GetAttributes(f));
-                File.SetCreationTime(cloudName, File.GetCreationTime(f));
-                File.SetLastAccessTime(cloudName, File.GetLastAccessTime(f));
-                File.SetLastWriteTime(cloudName, File.GetLastWriteTime(f));
+                if (isHidden || isSystem || isReadOnly)
+                {
+                  File.SetAttributes(cloudName, File.GetAttributes(f));
+                }
+                //File.SetCreationTime(cloudName, File.GetCreationTime(f));
+                //File.SetLastAccessTime(cloudName, File.GetLastAccessTime(f));
+                //File.SetLastWriteTime(cloudName, File.GetLastWriteTime(f));
               }
             }
             textBoxProgress.AppendText("Copying file : " + f + " to cloud : " + cloudName + Environment.NewLine);
