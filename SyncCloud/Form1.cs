@@ -76,6 +76,8 @@ namespace SyncCloud
           DialogResult result = MessageBox.Show(msg, "Check Folders", MessageBoxButtons.YesNo);
           if (result == DialogResult.No || result == DialogResult.Cancel || result == DialogResult.Abort)
           {
+            textBoxProgress.Clear();
+            textBoxProgress.AppendText("Cancelled." + Environment.NewLine);
             return;
           }
         }
