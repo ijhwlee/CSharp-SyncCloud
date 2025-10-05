@@ -58,11 +58,8 @@ namespace SyncCloud
     }
     private async void btnSync_Click(object sender, EventArgs e)
     {
-      setActionButtons(false);
       if (cloudFolderSet && localFolderSet)
       {
-        textBoxProgress.Clear();
-        textBoxProgress.AppendText("Working..."+ Environment.NewLine);
         if (!textBoxCloudFolder.Text.Contains("OneDrive"))
         {
           string msg = "Cloud folder does not contain OneDrive, please re-select.\nCurrently only support MS OneDrive.";
@@ -76,9 +73,15 @@ namespace SyncCloud
           string msg = "Cloud and local folder seems not match, are you sure to continue?";
           msg += "\nCloud : " + textBoxCloudFolder.Text;
           msg += "\nLocal : " + textBoxLocalFolder.Text;
-          if (MessageBox.Show(msg, "Check Folders", MessageBoxButtons.YesNo) == DialogResult.No)
+          DialogResult result = MessageBox.Show(msg, "Check Folders", MessageBoxButtons.YesNo);
+          if (result == DialogResult.No || result == DialogResult.Cancel || result == DialogResult.Abort)
+          {
             return;
+          }
         }
+        setActionButtons(false);
+        textBoxProgress.Clear();
+        textBoxProgress.AppendText("Working..." + Environment.NewLine);
         string[] cloudFolders = await Task.Run(()=>Directory.GetDirectories(textBoxCloudFolder.Text));
         string[] localFolders = await Task.Run(()=>Directory.GetDirectories(textBoxLocalFolder.Text));
         int syncFile = await syncFoldersAsync(cloudFolders, localFolders, textBoxCloudFolder.Text, textBoxLocalFolder.Text);
@@ -106,12 +109,12 @@ namespace SyncCloud
           Debug.WriteLine(f);
         }*/
         textBoxProgress.AppendText("Finished."+ Environment.NewLine);
+        setActionButtons(true);
       }
       else
       {
         MessageBox.Show("Please set cloud and/or local folder");
       }
-      setActionButtons(true);
     }
     private async Task<int> syncFoldersAsync(string[] cloud, string[] local, string parentCloud, string parentLocal)
     {
