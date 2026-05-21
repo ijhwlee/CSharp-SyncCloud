@@ -7,12 +7,58 @@ namespace SyncCloud
     ///  This program is a utility to syncronize cloud data into local hard
     /// </summary>
     [STAThread]
-    static void Main()
+    static int Main(string[] args)
     {
-      // To customize application configuration such as set high DPI settings or default font,
-      // see https://aka.ms/applicationconfiguration.
-      ApplicationConfiguration.Initialize();
-      Application.Run(new Form1());
+      CommandLineArguments commandLineArguments = CommandLineArguments.Parse(args);
+      if (commandLineArguments.ShowHelp)
+      {
+        NativeConsole.EnsureForCommandLine();
+        Console.WriteLine(CommandLineArguments.Usage);
+        return 0;
+      }
+
+      if (commandLineArguments.Errors.Count > 0)
+      {
+        NativeConsole.EnsureForCommandLine();
+        foreach (string error in commandLineArguments.Errors)
+        {
+          Console.Error.WriteLine("Error: " + error);
+        }
+        Console.Error.WriteLine();
+        Console.Error.WriteLine(CommandLineArguments.Usage);
+        return 2;
+      }
+
+      if (commandLineArguments.UseGui)
+      {
+        ApplicationConfiguration.Initialize();
+        NativeConsole.DetachForGui();
+        Application.Run(new Form1(commandLineArguments.Options));
+        return 0;
+      }
+
+      NativeConsole.EnsureForCommandLine();
+      return RunFromCommandLineAsync(commandLineArguments.Options).GetAwaiter().GetResult();
+    }
+
+    private static async Task<int> RunFromCommandLineAsync(SyncOptions options)
+    {
+      IReadOnlyList<string> errors = SyncEngine.Validate(options);
+      if (errors.Count > 0)
+      {
+        foreach (string error in errors)
+        {
+          Console.Error.WriteLine("Error: " + error);
+        }
+        return 2;
+      }
+
+      Console.WriteLine("Working...");
+      SyncEngine syncEngine = new SyncEngine(message => Console.WriteLine(message));
+      SyncResult result = await syncEngine.SyncAsync(options);
+      Console.WriteLine("Finished.");
+      Console.WriteLine(result.Message);
+      return 0;
     }
   }
 }
