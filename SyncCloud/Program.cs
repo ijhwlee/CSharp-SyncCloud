@@ -55,10 +55,18 @@ namespace SyncCloud
 
       Console.WriteLine("Working...");
       SyncEngine syncEngine = new SyncEngine(message => Console.WriteLine(message));
-      SyncResult result = await syncEngine.SyncAsync(options);
-      Console.WriteLine("Finished.");
-      Console.WriteLine(result.Message);
-      return 0;
+      try
+      {
+        SyncResult result = await syncEngine.SyncAsync(options);
+        Console.WriteLine("Finished.");
+        Console.WriteLine(result.Message);
+        return 0;
+      }
+      catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+      {
+        Console.Error.WriteLine($"Sync failed ({error.GetType().Name}, HRESULT 0x{error.HResult:X8}): {error.Message}");
+        return 1;
+      }
     }
   }
 }

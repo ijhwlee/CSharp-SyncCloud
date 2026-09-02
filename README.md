@@ -75,6 +75,25 @@ Available options:
 
 The application does not perform content hashing or conflict merging. Timestamp comparison is the current conflict policy.
 
+Copies are staged in a uniquely named `.synccloud-*.tmp` file beside the destination.
+The destination is replaced only after the source has been read successfully and the
+staged file flushed. Source last-write timestamps are retained. Ordinary failed copies
+clean up their temporary file and do not truncate the destination. A forced process kill
+can leave a temporary file, but does not replace the destination with incomplete data.
+CLI file-access failures print an error (including HRESULT) and return exit code 1.
+
+OneDrive online-only files require the signed-in user's OneDrive context. Run these
+jobs in that user's interactive session, not as LocalSystem. For unattended access
+without that session, use fully downloaded local inputs or an authenticated cloud API.
+Older failed runs may have left zero-byte destinations with newer timestamps; these
+require explicit recovery because the timestamp conflict policy is unchanged.
+
+Run the dependency-free copy regression checks with:
+
+```powershell
+dotnet run --project tests/SyncCloud.RegressionTests -c Release
+```
+
 ## Project Layout
 
 ```text

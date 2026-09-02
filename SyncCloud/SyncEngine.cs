@@ -2,7 +2,6 @@ namespace SyncCloud
 {
   public sealed class SyncEngine
   {
-    private const int BufferSize = 81920;
     private readonly Action<string> progress;
 
     public SyncEngine(Action<string>? progress = null)
@@ -172,7 +171,7 @@ namespace SyncCloud
 
         if (!File.Exists(localName) || File.GetLastWriteTimeUtc(cloudFile).ToFileTime() > File.GetLastWriteTimeUtc(localName).ToFileTime())
         {
-          await CopyFileAsync(cloudFile, localName);
+          await AtomicFileCopier.CopyAsync(cloudFile, localName);
           progress("Copying file : " + cloudFile + " to local : " + localName);
           if (options.RemoveCloud && options.Mode == ActionMode.toLocal)
           {
@@ -201,7 +200,7 @@ namespace SyncCloud
 
         if (!File.Exists(cloudName) || File.GetLastWriteTimeUtc(localFile).ToFileTime() > File.GetLastWriteTimeUtc(cloudName).ToFileTime())
         {
-          await CopyFileAsync(localFile, cloudName);
+          await AtomicFileCopier.CopyAsync(localFile, cloudName);
           progress("Copying file : " + localFile + " to cloud : " + cloudName);
           syncedFiles++;
         }
@@ -210,42 +209,5 @@ namespace SyncCloud
       return syncedFiles;
     }
 
-    private static async Task CopyFileAsync(string source, string destination)
-    {
-      FileInfo destinationInfo = new FileInfo(destination);
-      bool isReadOnly = false;
-      bool restoreAttributes = false;
-
-      if (destinationInfo.Exists && destinationInfo.IsReadOnly)
-      {
-        destinationInfo.IsReadOnly = false;
-        isReadOnly = true;
-      }
-
-      if (File.Exists(destination))
-      {
-        FileAttributes attr = File.GetAttributes(destination);
-        bool isHidden = (attr & FileAttributes.Hidden) != 0;
-        bool isSystem = (attr & FileAttributes.System) != 0;
-        restoreAttributes = isHidden || isSystem || isReadOnly;
-        if (restoreAttributes)
-        {
-          File.SetAttributes(destination, FileAttributes.Normal);
-        }
-      }
-
-      using (FileStream outStream = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: BufferSize, useAsync: true))
-      {
-        using (FileStream inStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: BufferSize, useAsync: true))
-        {
-          await inStream.CopyToAsync(outStream);
-        }
-      }
-
-      if (restoreAttributes)
-      {
-        File.SetAttributes(destination, File.GetAttributes(source));
-      }
-    }
   }
 }
