@@ -2,6 +2,7 @@ namespace SyncCloud
 {
   public sealed class SyncEngine
   {
+    private const int CloudFileAccessDeniedHResult = unchecked((int)0x8007018B);
     private readonly Action<string> progress;
 
     public SyncEngine(Action<string>? progress = null)
@@ -78,55 +79,55 @@ namespace SyncCloud
 
     public async Task<SyncResult> SyncAsync(SyncOptions options)
     {
-      int syncedFiles = await SyncDirectoryAsync(options.CloudFolder, options.LocalFolder, options);
-      return new SyncResult(syncedFiles, options.CloudFolder, options.LocalFolder);
+      SyncCounters counters = new SyncCounters();
+      await SyncDirectoryAsync(options.CloudFolder, options.LocalFolder, options, counters);
+      return new SyncResult(counters.SyncedFiles, options.CloudFolder, options.LocalFolder, counters.SkippedCloudFiles);
     }
 
-    private async Task<int> SyncDirectoryAsync(string cloudFolder, string localFolder, SyncOptions options)
+    private async Task SyncDirectoryAsync(string cloudFolder, string localFolder, SyncOptions options, SyncCounters counters)
     {
-      int syncedFiles = 0;
       HashSet<string> syncedChildFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
       if (options.Mode == ActionMode.toLocal || options.Mode == ActionMode.Synchronize)
       {
-        syncedFiles += await EnsureChildFoldersAsync(
+        await EnsureChildFoldersAsync(
           sourceParent: cloudFolder,
           targetParent: localFolder,
           sourceIsCloud: true,
           options,
+          counters,
           syncedChildFolders);
       }
 
       if (options.Mode == ActionMode.toCloud || options.Mode == ActionMode.Synchronize)
       {
-        syncedFiles += await EnsureChildFoldersAsync(
+        await EnsureChildFoldersAsync(
           sourceParent: localFolder,
           targetParent: cloudFolder,
           sourceIsCloud: false,
           options,
+          counters,
           syncedChildFolders);
       }
 
       if (options.Mode == ActionMode.toLocal || options.Mode == ActionMode.Synchronize)
       {
-        syncedFiles += await SyncFilesToLocalAsync(cloudFolder, localFolder, options);
+        await SyncFilesToLocalAsync(cloudFolder, localFolder, options, counters);
       }
 
       if (options.Mode == ActionMode.toCloud || options.Mode == ActionMode.Synchronize)
       {
-        syncedFiles += await SyncFilesToCloudAsync(cloudFolder, localFolder, options);
+        await SyncFilesToCloudAsync(cloudFolder, localFolder, options, counters);
       }
-
-      return syncedFiles;
     }
 
-    private async Task<int> EnsureChildFoldersAsync(
+    private async Task EnsureChildFoldersAsync(
       string sourceParent,
       string targetParent,
       bool sourceIsCloud,
       SyncOptions options,
+      SyncCounters counters,
       HashSet<string> syncedChildFolders)
     {
-      int syncedFiles = 0;
       string sourceLabel = sourceIsCloud ? "cloud" : "local";
       string[] sourceFolders = await Task.Run(() => Directory.GetDirectories(sourceParent));
       foreach (string sourceFolder in sourceFolders)
@@ -148,18 +149,16 @@ namespace SyncCloud
           continue;
         }
 
-        syncedFiles += await SyncDirectoryAsync(
+        await SyncDirectoryAsync(
           sourceIsCloud ? sourceFolder : targetFolder,
           sourceIsCloud ? targetFolder : sourceFolder,
-          options);
+          options,
+          counters);
       }
-
-      return syncedFiles;
     }
 
-    private async Task<int> SyncFilesToLocalAsync(string cloudFolder, string localFolder, SyncOptions options)
+    private async Task SyncFilesToLocalAsync(string cloudFolder, string localFolder, SyncOptions options, SyncCounters counters)
     {
-      int syncedFiles = 0;
       string[] cloudFiles = await Task.Run(() => Directory.GetFiles(cloudFolder));
       foreach (string cloudFile in cloudFiles)
       {
@@ -171,24 +170,31 @@ namespace SyncCloud
 
         if (!File.Exists(localName) || File.GetLastWriteTimeUtc(cloudFile).ToFileTime() > File.GetLastWriteTimeUtc(localName).ToFileTime())
         {
-          await AtomicFileCopier.CopyAsync(cloudFile, localName);
-          progress("Copying file : " + cloudFile + " to local : " + localName);
+          try
+          {
+            await AtomicFileCopier.CopyAsync(cloudFile, localName);
+            progress("Copying file : " + cloudFile + " to local : " + localName);
+          }
+          catch (Exception error) when (IsSkippableCloudAccessFailure(error))
+          {
+            counters.SkippedCloudFiles++;
+            progress($"Skipping inaccessible cloud file ({error.GetType().Name}, HRESULT 0x{error.HResult:X8}): {cloudFile}");
+            continue;
+          }
+
           if (options.RemoveCloud && options.Mode == ActionMode.toLocal)
           {
             await Task.Run(() => File.Delete(cloudFile));
             progress("    Removing file : " + cloudFile + " from cloud ");
           }
 
-          syncedFiles++;
+          counters.SyncedFiles++;
         }
       }
-
-      return syncedFiles;
     }
 
-    private async Task<int> SyncFilesToCloudAsync(string cloudFolder, string localFolder, SyncOptions options)
+    private async Task SyncFilesToCloudAsync(string cloudFolder, string localFolder, SyncOptions options, SyncCounters counters)
     {
-      int syncedFiles = 0;
       string[] localFiles = await Task.Run(() => Directory.GetFiles(localFolder));
       foreach (string localFile in localFiles)
       {
@@ -202,12 +208,20 @@ namespace SyncCloud
         {
           await AtomicFileCopier.CopyAsync(localFile, cloudName);
           progress("Copying file : " + localFile + " to cloud : " + cloudName);
-          syncedFiles++;
+          counters.SyncedFiles++;
         }
       }
-
-      return syncedFiles;
     }
 
+    internal static bool IsSkippableCloudAccessFailure(Exception error)
+    {
+      return error.HResult == CloudFileAccessDeniedHResult;
+    }
+
+    private sealed class SyncCounters
+    {
+      public int SyncedFiles { get; set; }
+      public int SkippedCloudFiles { get; set; }
+    }
   }
 }
