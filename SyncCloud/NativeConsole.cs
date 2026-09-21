@@ -18,6 +18,18 @@ namespace SyncCloud
       FreeConsole();
     }
 
+    public static int GetOutputWidth()
+    {
+      try
+      {
+        return !Console.IsOutputRedirected && Console.WindowWidth > 0 ? Console.WindowWidth : 80;
+      }
+      catch (IOException)
+      {
+        return 80;
+      }
+    }
+
     private static void ResetConsoleWriters()
     {
       Encoding outputEncoding = GetConsoleOutputEncoding();

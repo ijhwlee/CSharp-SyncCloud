@@ -110,7 +110,7 @@ namespace SyncCloud
       AppendProgress("Working...");
       try
       {
-        SyncEngine syncEngine = new SyncEngine(AppendProgress);
+        SyncEngine syncEngine = new SyncEngine(AppendProgress, GetProgressWidth);
         SyncResult result = await syncEngine.SyncAsync(options);
         MessageBox.Show(result.Message, "Sync Result", MessageBoxButtons.OK);
         AppendProgress("Finished.");
@@ -136,6 +136,15 @@ namespace SyncCloud
         ShowCopyOnly = showCopyOnly,
         Mode = actionMode
       };
+    }
+
+    private int GetProgressWidth()
+    {
+      int characterWidth = TextRenderer.MeasureText("=", textBoxProgress.Font,
+        Size.Empty, TextFormatFlags.NoPadding).Width;
+      // Leave room for the text box margins and vertical scrollbar.
+      int availableWidth = textBoxProgress.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4;
+      return Math.Max(1, availableWidth / Math.Max(1, characterWidth));
     }
 
     private void AppendProgress(string message)

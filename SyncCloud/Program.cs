@@ -54,7 +54,7 @@ namespace SyncCloud
       }
 
       Console.WriteLine("Working...");
-      SyncEngine syncEngine = new SyncEngine(message => Console.WriteLine(message));
+      SyncEngine syncEngine = new SyncEngine(message => Console.WriteLine(message), NativeConsole.GetOutputWidth);
       try
       {
         SyncResult result = await syncEngine.SyncAsync(options);

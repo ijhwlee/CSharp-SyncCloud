@@ -4,10 +4,12 @@ namespace SyncCloud
   {
     private const int CloudFileAccessDeniedHResult = unchecked((int)0x8007018B);
     private readonly Action<string> progress;
+    private readonly Func<int> outputWidth;
 
-    public SyncEngine(Action<string>? progress = null)
+    public SyncEngine(Action<string>? progress = null, Func<int>? outputWidth = null)
     {
       this.progress = progress ?? (_ => { });
+      this.outputWidth = outputWidth ?? (() => 80);
     }
 
     public static IReadOnlyList<string> Validate(SyncOptions options)
@@ -118,6 +120,8 @@ namespace SyncCloud
       {
         await SyncFilesToCloudAsync(cloudFolder, localFolder, options, counters);
       }
+
+      progress(new string('=', Math.Max(1, outputWidth())));
     }
 
     private async Task EnsureChildFoldersAsync(
